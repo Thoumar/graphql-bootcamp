@@ -1,0 +1,81 @@
+type Query {
+  comments(query: String): [Comment!]!
+  users(query: String): [User!]!
+  posts(query: String): [Post!]!
+  me: User!
+  post: Post!
+}
+
+type Mutation {
+  createUser(data: CreateUserInput): User!
+  updateUser(id: String!, data: UpdateUserInput): User!
+  deleteUser(id: String!): User!
+
+  createPost(data: CreatePostInput): Post!
+  updatePost(id: String!, data: UpdatePostInput): Post!
+  deletePost(id: String!): Post!
+
+  createComment(data: createCommentInput): Comment!
+  updateComment(id: String!, data: UpdateCommentInput): Comment!
+  deleteComment(id: String!): Comment!
+}
+
+input CreateUserInput {
+  name: String!
+  email: String!
+  age: Int
+}
+
+input UpdateUserInput {
+  name: String
+  email: String
+  age: Int
+}
+
+input UpdateCommentInput {
+  text: String
+}
+
+input CreatePostInput {
+  title: String!
+  body: String!
+  published: Boolean!
+  author: ID!
+}
+
+input UpdatePostInput {
+  title: String
+  body: String
+  published: Boolean
+}
+
+input createCommentInput {
+  text: String!
+  post: ID!
+  author: ID!
+}
+
+type User {
+  id: ID!
+  name: String!
+  email: String!
+  age: Int
+  posts: [Post!]!
+  comments: [Comment!]!
+}
+
+type Post {
+  id: ID!
+  title: String!
+  body: String!
+  published: Boolean!
+  author: User!
+  comments: [Comment!]!
+}
+
+type Comment {
+  id: ID!
+  text: String!
+  author: User!
+  post: Post!
+}
