@@ -1,4 +1,5 @@
 import uuid from "uuid/v4";
+import { PubSub } from "graphql-yoga";
 
 const Mutation = {
   createUser(parent, args, { db }, info) {
@@ -65,7 +66,7 @@ const Mutation = {
 
     return deletedUsers[0];
   },
-  createPost(parent, args, { db }, info) {
+  createPost(parent, args, { db, pubsub }, info) {
     const userExist = db.users.some((user) => user.id === args.data.author);
     if (!userExist) {
       throw new Error("User not found");
@@ -77,11 +78,19 @@ const Mutation = {
     };
 
     db.posts.push(post);
-
+    if (post.published) {
+      pubsub.publish("post", {
+        post: {
+          mutation: "CREATED",
+          data: post,
+        },
+      });
+    }
     return post;
   },
-  updatePost(parent, args, { db }, info) {
+  updatePost(parent, args, { db, pubsub }, info) {
     const post = db.posts.find((post) => post.id === args.id);
+    const originalPost = { ...post };
 
     if (!post) {
       throw new Error("Post not found");
@@ -95,25 +104,58 @@ const Mutation = {
       post.body = args.data.body;
     }
 
-    if (typeof args.data.published == "bool") {
+    if (typeof args.data.published == "boolean") {
       post.published = args.data.published;
+
+      if (originalPost.published && !post.published) {
+        pubsub.publish("post", {
+          post: {
+            mutation: "DELETED",
+            data: originalPost,
+          },
+        });
+      } else if (!originalPost.published && spost.published) {
+        pubsub.publish("post", {
+          post: {
+            mutation: "CREATED",
+            data: post,
+          },
+        });
+      }
+    } else if (post.published) {
+      pubsub.publish("post", {
+        post: {
+          mutation: "UPDATED",
+          data: post,
+        },
+      });
     }
     return post;
   },
-  deletePost(parent, args, { db }, info) {
+  deletePost(parent, args, { db, pubsub }, info) {
     const postIndex = db.posts.findIndex((post) => post.id === args.id);
 
     if (postIndex == -1) {
       throw new Error("Post not found");
     }
 
+    const [post] = db.posts.splice(postIndex, 1);
+
     const deletedPosts = db.posts.splice(postIndex, 1);
 
     db.comments = db.comments.filter((comment) => comment.post !== args.id);
 
+    if (post.published) {
+      pubsub.publish("post", {
+        post: {
+          mutation: "DELETED",
+          data: post,
+        },
+      });
+    }
     return deletedPosts[0];
   },
-  createComment(parent, args, { db }, info) {
+  createComment(parent, args, { db, pubsub }, info) {
     const userExist = db.users.some((user) => user.id === args.data.author);
     const postExist = db.posts.some(
       (post) => post.id === args.data.post && post.published
@@ -129,7 +171,12 @@ const Mutation = {
     };
 
     db.comments.push(comment);
-
+    pubsub.publish(`comment ${args.data.post}`, {
+      comment: {
+        mutation: "CREATED",
+        data: comment,
+      },
+    });
     return comment;
   },
   updateComment(parent, args, { db }, info) {
@@ -143,6 +190,13 @@ const Mutation = {
       comment.text = args.data.text;
     }
 
+    pubsub.publish(`comment ${args.data.post}`, {
+      comment: {
+        mutation: "UPDATED",
+        data: comment,
+      },
+    });
+
     return comment;
   },
   deleteComment(parent, args, { db }, info) {
@@ -154,9 +208,16 @@ const Mutation = {
       throw new Error("Post not found");
     }
 
-    const deletedComments = db.comments.splice(commentIndex, 1);
+    const [deletedComment] = db.comments.splice(commentIndex, 1);
 
-    return deletedComments[0];
+    pubsub.publish(`comment ${deletedComment.post}`, {
+      comment: {
+        mutation: "DELETED",
+        data: deletedComment,
+      },
+    });
+
+    return deletedComment;
   },
 };
 
